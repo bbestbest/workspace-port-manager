@@ -1,0 +1,11 @@
+[package]
+name = "port_management"
+version = "0.1.0"
+edition = "2021"
+description = "A macOS GUI application for managing development project ports"
+
+[dependencies]
+ratatui = "0.28"
+crossterm = "0.28"
+serde = { version = "1.0", features = ["derive"] }
+dirs = "5.0"
