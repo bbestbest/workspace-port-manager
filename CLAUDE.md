@@ -11,3 +11,11 @@
 - Shows project relative paths like "mac/project1" with current port status or "─" if none
 - Folder expand/collapse functionality with cursor can select both project items and folder headers
 - Navigation includes folder headers - cursor can navigate to collapsed folder headers to expand them
+- Refactored using SOLID principles with modular architecture:
+  * project_scanner.rs - Single responsibility for finding projects
+  * navigation.rs - Handles cursor movement and input state
+  * ui.rs - Renders the terminal interface
+  * port_manager.rs - Manages .env file operations
+  * display_builder.rs - Converts projects to display items
+  * main.rs - Coordinates modules and handles events
+- Extensive documentation explaining Rust concepts for beginners (ownership, borrowing, pattern matching, error handling)
