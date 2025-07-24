@@ -80,6 +80,9 @@ struct App {
     /// Filtered items when searching
     filtered_items: Vec<DisplayItem>,
 
+    /// Whether we have confirmed search results to display
+    has_confirmed_search: bool,
+
     /// Current status message to show user
     status_message: String,
 
@@ -121,6 +124,7 @@ impl App {
             projects: Vec::new(),
             display_items: Vec::new(),
             filtered_items: Vec::new(),
+            has_confirmed_search: false,
             status_message: "Ready - hjkl/↑↓: navigate, Ctrl+U/Ctrl+D: page up/down, r: set port, R: refresh, s: sort, /: search, e: expand, w: collapse, q: quit".to_string(),
             navigation,
             scanner,
@@ -169,16 +173,6 @@ impl App {
         self.filtered_items = self.display_items.clone();
     }
 
-    /// Gets the appropriate display items based on current mode
-    ///
-    /// This is a helper method that returns the right set of items
-    /// depending on whether we're searching or not.
-    fn get_current_items(&self) -> &[DisplayItem] {
-        match self.navigation.input_mode() {
-            InputMode::Searching => &self.filtered_items,
-            _ => &self.display_items,
-        }
-    }
 
     /// Gets current items as a cloned vector to avoid borrowing issues
     fn get_current_items_cloned(&self) -> Vec<DisplayItem> {
@@ -220,6 +214,11 @@ impl App {
             // Refresh projects
             KeyCode::Char('R') => {
                 self.scan_projects();
+                // Reset search state if we were searching
+                if *self.navigation.input_mode() == InputMode::Searching {
+                    self.status_message = self.navigation.cancel_input();
+                }
+                self.has_confirmed_search = false;
             }
 
             // Start editing port
@@ -236,11 +235,17 @@ impl App {
                 self.status_message = self.navigation.toggle_sort();
                 self.build_display_items();
                 self.navigation.reset_cursor_position(&self.display_items);
+                // Reset search state if we were searching
+                if *self.navigation.input_mode() == InputMode::Searching {
+                    self.navigation.cancel_input();
+                }
+                self.has_confirmed_search = false;
             }
 
             // Start search
             KeyCode::Char('/') => {
                 self.status_message = self.navigation.start_search();
+                self.has_confirmed_search = false;
                 self.filter_projects();
             }
 
@@ -336,20 +341,24 @@ impl App {
     /// Handles keys in search mode
     fn handle_searching_mode_key(&mut self, key: crossterm::event::KeyEvent) {
         match key.code {
-            // Confirm search
+            // Confirm search - stay in normal mode with filtered results
             KeyCode::Enter => {
                 let result_count = self
                     .filtered_items
                     .iter()
                     .filter(|item| !item.is_header)
                     .count();
-                self.status_message = self.navigation.confirm_search(result_count);
+                self.status_message = format!("Found {} matches - hjkl/↑↓: navigate, r: set port, R: refresh, s: sort, /: search, e: expand, w: collapse", result_count);
+                self.navigation.set_input_mode_normal();
+                self.has_confirmed_search = true;
+                self.navigation.reset_cursor_position(&self.filtered_items);
             }
 
-            // Cancel search
+            // Cancel search and return to all projects
             KeyCode::Esc => {
                 self.status_message = self.navigation.cancel_input();
                 self.filtered_items = self.display_items.clone();
+                self.has_confirmed_search = false;
                 self.navigation.reset_cursor_position(&self.display_items);
             }
 
@@ -375,8 +384,8 @@ impl App {
         // Get the port number from navigation
         match self.navigation.get_port_number() {
             Ok(port) => {
-                // Get current project
-                let items = &self.filtered_items;
+                // Get current project - use appropriate items based on mode
+                let items = self.get_current_items_cloned();
                 let selected_index = self.navigation.selected_index();
 
                 if let Some(project_index) = items
@@ -447,7 +456,11 @@ fn run_app(
         terminal.draw(|f| {
             let items = match app.navigation.input_mode() {
                 InputMode::Searching => &app.filtered_items,
-                _ => &app.display_items,
+                _ => if app.has_confirmed_search {
+                    &app.filtered_items
+                } else {
+                    &app.display_items
+                },
             };
             app.ui_renderer.render(
                 f,

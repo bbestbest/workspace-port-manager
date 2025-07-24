@@ -87,6 +87,7 @@ impl DisplayBuilder {
     /// 
     /// This method implements search functionality by filtering both
     /// folder headers and project items based on the search term.
+    /// It ensures that parent folder headers are included if they have matching children.
     pub fn filter_display_items(
         &self,
         display_items: &[DisplayItem],
@@ -97,13 +98,43 @@ impl DisplayBuilder {
         }
         
         let search_lower = search_query.to_lowercase();
+        let mut filtered_items = Vec::new();
+        let mut current_header: Option<DisplayItem> = None;
+        let mut has_matching_children = false;
         
-        // Filter items based on search criteria
-        display_items
-            .iter()
-            .filter(|item| self.item_matches_search(item, &search_lower))
-            .cloned()  // Clone each item (since we're returning owned data)
-            .collect() // Collect into new Vec
+        for item in display_items {
+            if item.is_header {
+                // If we have a previous header with matching children, add it
+                if let Some(header) = current_header.take() {
+                    if has_matching_children {
+                        filtered_items.push(header);
+                    }
+                }
+                
+                // Store the new header and reset match flag
+                current_header = Some(item.clone());
+                has_matching_children = self.item_matches_search(item, &search_lower);
+            } else {
+                // Check if this project matches
+                if self.item_matches_search(item, &search_lower) {
+                    // If we have a pending header and this is the first match, add the header
+                    if let Some(header) = current_header.take() {
+                        filtered_items.push(header);
+                    }
+                    filtered_items.push(item.clone());
+                    has_matching_children = true;
+                }
+            }
+        }
+        
+        // Handle the last header if it has matching children
+        if let Some(header) = current_header {
+            if has_matching_children {
+                filtered_items.push(header);
+            }
+        }
+        
+        filtered_items
     }
     
     // === Private Helper Methods ===
@@ -209,16 +240,24 @@ impl DisplayBuilder {
     /// Checks if a folder header matches the search
     fn header_matches_search(&self, header_content: &str, search_lower: &str) -> bool {
         // Extract folder name from "📂 ▼ foldername/"
-        let folder_name = header_content
-            .strip_prefix("📂 ")           // Remove emoji and space
-            .unwrap_or(header_content)     // Fallback to full content
-            .split_whitespace()            // Split by whitespace
-            .nth(1)                        // Get second part (folder name)
-            .unwrap_or("")                 // Fallback to empty string
-            .trim_end_matches('/')         // Remove trailing slash
-            .to_lowercase();               // Convert to lowercase for comparison
+        // More robust parsing that handles different emoji encodings
+        let folder_name = if let Some(slash_pos) = header_content.rfind('/') {
+            // Find the last space before the slash to get the folder name
+            let before_slash = &header_content[..slash_pos];
+            if let Some(space_pos) = before_slash.rfind(' ') {
+                &header_content[space_pos + 1..slash_pos]
+            } else {
+                before_slash
+            }
+        } else {
+            // Fallback: try to extract after the last space
+            header_content
+                .split_whitespace()
+                .last()
+                .unwrap_or(header_content)
+        };
         
-        folder_name.contains(search_lower)
+        folder_name.to_lowercase().contains(search_lower)
     }
     
     /// Checks if a project item matches the search

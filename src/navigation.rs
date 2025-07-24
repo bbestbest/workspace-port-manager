@@ -238,12 +238,12 @@ impl NavigationHandler {
         self.search_input.clear();
         "Cancelled - hjkl/↑↓: navigate, r: set port, R: refresh, s: sort, /: search, e: expand, w: collapse".to_string()
     }
-    
-    /// Confirms search and stays in normal mode with filtered results
-    pub fn confirm_search(&mut self, result_count: usize) -> String {
+
+    /// Sets input mode to normal (used after confirming search)
+    pub fn set_input_mode_normal(&mut self) {
         self.input_mode = InputMode::Normal;
-        format!("Found {} matches - hjkl/↑↓: navigate, r: set port, R: refresh, s: sort, /: search, e: expand, w: collapse", result_count)
     }
+    
     
     // === Input Handling ===
     
@@ -338,16 +338,6 @@ impl NavigationHandler {
         self.update_scroll_position(items);
     }
     
-    /// Positions cursor on specific folder header after expand/collapse
-    pub fn position_on_folder(&mut self, items: &[DisplayItem], folder_name: &str) {
-        for (i, item) in items.iter().enumerate() {
-            if item.is_header && item.content.contains(folder_name) {
-                self.selected_index = i;
-                self.update_scroll_position(items);
-                break;
-            }
-        }
-    }
     
     // === Private Helper Methods ===
     

@@ -32,8 +32,6 @@ pub struct PortManager {
 pub enum PortError {
     /// File system error (file not found, permission denied, etc.)
     FileSystem(std::io::Error),
-    /// Invalid port number (not a valid u16)
-    InvalidPort(String),
     /// Project not found
     ProjectNotFound,
 }
@@ -46,7 +44,6 @@ impl std::fmt::Display for PortError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             PortError::FileSystem(err) => write!(f, "File system error: {}", err),
-            PortError::InvalidPort(port_str) => write!(f, "Invalid port number: '{}'", port_str),
             PortError::ProjectNotFound => write!(f, "Project not found"),
         }
     }
@@ -128,64 +125,9 @@ impl PortManager {
         Ok(())  // Success - return unit type wrapped in Ok
     }
     
-    /// Gets the current port for a project
-    /// 
-    /// Returns Option<u16> because the project might not have a port set.
-    pub fn get_port(&self, project: &ProjectInfo) -> Option<u16> {
-        let project_path = self.workspace_root.join(&project.name);
-        let env_file = project_path.join(".env");
-        
-        // Early return if file doesn't exist
-        if !env_file.exists() {
-            return None;
-        }
-        
-        // Try to read file content
-        let content = fs::read_to_string(&env_file).ok()?;  // ? with Option
-        
-        // Search for PORT= line
-        self.extract_port_from_content(&content)
-    }
     
-    /// Validates a port number string
-    /// 
-    /// This is a utility method that checks if a string represents a valid port.
-    pub fn validate_port(port_str: &str) -> Result<u16, PortError> {
-        port_str.parse::<u16>()
-            .map_err(|_| PortError::InvalidPort(port_str.to_string()))
-    }
     
-    /// Updates all projects with their current port information
-    /// 
-    /// This method modifies the projects vector in place.
-    /// The '&mut' parameter allows us to modify the vector's contents.
-    pub fn refresh_port_info(&self, projects: &mut [ProjectInfo]) {
-        for project in projects.iter_mut() {  // iter_mut() gives mutable references
-            project.port = self.get_port(project);
-        }
-    }
     
-    /// Removes port setting from a project
-    /// 
-    /// This deletes the PORT= line from the .env file.
-    pub fn remove_port(&self, project: &ProjectInfo) -> Result<(), PortError> {
-        let project_path = self.workspace_root.join(&project.name);
-        let env_file = project_path.join(".env");
-        
-        // If .env doesn't exist, nothing to remove
-        if !env_file.exists() {
-            return Ok(());
-        }
-        
-        let existing_content = fs::read_to_string(&env_file)?;
-        let new_content = self.remove_port_from_content(&existing_content);
-        
-        // If content is now empty, we could delete the file
-        // But it's safer to just write empty content
-        fs::write(&env_file, new_content)?;
-        
-        Ok(())
-    }
     
     // === Private Helper Methods ===
     
@@ -229,32 +171,7 @@ impl PortManager {
             + "\n"                            // Add final newline
     }
     
-    /// Removes PORT= line from .env file content
-    fn remove_port_from_content(&self, content: &str) -> String {
-        content
-            .lines()                          // Split into lines
-            .filter(|line| !line.starts_with("PORT="))  // Keep non-PORT lines
-            .collect::<Vec<_>>()              // Collect into vector
-            .join("\n")                       // Join with newlines
-    }
     
-    /// Extracts port number from .env file content
-    /// 
-    /// This searches through all lines looking for PORT= entries.
-    fn extract_port_from_content(&self, content: &str) -> Option<u16> {
-        for line in content.lines() {
-            if line.starts_with("PORT=") {
-                // Extract the part after "PORT="
-                let port_str = line.trim_start_matches("PORT=").trim();
-                
-                // Try to parse as number
-                if let Ok(port) = port_str.parse::<u16>() {
-                    return Some(port);
-                }
-            }
-        }
-        None
-    }
 }
 
 /// Default implementation for PortManager
